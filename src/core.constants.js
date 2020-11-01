@@ -38,12 +38,13 @@ const EVENT = {
   LAYOUT_CHANGE: 'octotree:layout',
   REQ_START: 'octotree:start',
   REQ_END: 'octotree:end',
-  OPTS_CHANGE: 'octotree:change',
+  STORE_CHANGE: 'octotree:storeChange',
   VIEW_READY: 'octotree:ready',
   VIEW_CLOSE: 'octotree:close',
   VIEW_SHOW: 'octotree:show',
   FETCH_ERROR: 'octotree:error',
-  SIDEBAR_HTML_INSERTED: 'octotree:sidebarHtmlInserted'
+  SIDEBAR_HTML_INSERTED: 'octotree:sidebarHtmlInserted',
+  REPO_LOADED: 'octotree:repoLoaded'
 };
 
 window.STORE = STORE;

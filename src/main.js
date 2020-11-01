@@ -31,11 +31,13 @@ $(document).ready(() => {
 
     for (const view of [treeView, errorView, optsView]) {
       $(view)
-        .on(EVENT.VIEW_READY, function(event) {
+        .on(EVENT.VIEW_READY, async function(event) {
           if (this !== optsView) {
             $document.trigger(EVENT.REQ_END);
 
-            if (adapter.isOnPRPage) {
+            optsView.$toggler.removeClass('selected');
+
+            if (adapter.isOnPRPage && await extStore.get(STORE.PR)) {
               treeView.$tree.jstree('open_all');
             }
           }
@@ -48,9 +50,11 @@ $(document).ready(() => {
             showView(hasError ? errorView : treeView);
           }
         })
-        .on(EVENT.OPTS_CHANGE, optionsChanged)
         .on(EVENT.FETCH_ERROR, (event, err) => showError(err));
     }
+
+    $(extStore)
+      .on(EVENT.STORE_CHANGE, optionsChanged);
 
     $document
       .on(EVENT.REQ_START, () => $spinner.addClass('octotree-spin--loading'))
@@ -102,14 +106,19 @@ $(document).ready(() => {
           case STORE.TOKEN:
           case STORE.LAZYLOAD:
           case STORE.ICONS:
-          case STORE.PR:
             reload = true;
+            break;
+          case STORE.PR:
+            reload = adapter.isOnPRPage;
             break;
           case STORE.HOVEROPEN:
             handleHoverOpenOption(newValue);
             break;
           case STORE.HOTKEYS:
             setHotkeys(newValue, oldValue);
+            break;
+          case STORE.PINNED:
+            onPinToggled(newValue);
             break;
         }
       });
@@ -137,7 +146,7 @@ $(document).ready(() => {
             // If we're in pin mode but sidebar doesn't show yet, show it.
             // Note if we're from another page back to code page, sidebar is "pinned", but not visible.
             if (isSidebarPinned()) await toggleSidebar();
-            else await togglePin();
+            else await onPinToggled(true);
           } else if (isSidebarVisible()) {
             const replacer = ['username', 'reponame', 'branch', 'pullNumber'];
             const repoChanged = JSON.stringify(repo, replacer) !== JSON.stringify(currRepo, replacer);
@@ -200,14 +209,22 @@ $(document).ready(() => {
         return togglePin();
       }
 
+      const sidebarPinned = !isSidebarPinned();
+      await extStore.set(STORE.PINNED, sidebarPinned);
+      return sidebarPinned;
+    }
+
+    async function onPinToggled(isPinned) {
+      if (isPinned === isSidebarPinned()) {
+        return;
+      }
+
       $pinner.toggleClass(PINNED_CLASS);
 
       const sidebarPinned = isSidebarPinned();
       $pinner.find('.tooltipped').attr('aria-label', `${sidebarPinned ? 'Unpin' : 'Pin'} this sidebar`);
       $document.trigger(EVENT.TOGGLE_PIN, sidebarPinned);
-      await extStore.set(STORE.PINNED, sidebarPinned);
       await toggleSidebar(sidebarPinned);
-      return sidebarPinned;
     }
 
     async function layoutChanged(save = false) {
@@ -222,7 +239,7 @@ $(document).ready(() => {
      * Controls how the sidebar behaves in float mode (i.e. non-pinned).
      */
     async function setupSidebarFloatingBehaviors() {
-      const MOUSE_LEAVE_DELAY = 500;
+      const MOUSE_LEAVE_DELAY = 400;
       const KEY_PRESS_DELAY = 4000;
       let isMouseInSidebar = false;
 
@@ -264,21 +281,17 @@ $(document).ready(() => {
           // Prevent mouseover from propagating to document
           event.stopPropagation();
         })
-        .on('focusin mousemove', (event) => {
+        .on('mousemove', (event) => {
           // Don't do anything while hovering on Toggler
           const isHoveringToggler = $toggler.is(event.target) || $toggler.has(event.target).length;
-
           if (isHoveringToggler) return;
 
-          /**
-           * Use 'focusin' instead of 'mouseenter' to handle the case when clicking a file in the
-           * sidebar then move outside -> 'mouseenter' is triggered in sidebar, clear the timer
-           * and keep sidebar open.
-           */
           isMouseInSidebar = true;
           clearTimer();
 
-          if (event.type === 'mousemove' && !isSidebarVisible()) toggleSidebar(true);
+          if (!isSidebarVisible()) {
+            toggleSidebar(true);
+          }
         });
     }
 
